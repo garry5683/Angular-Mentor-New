@@ -1,0 +1,7 @@
+{
+  "name": "Angular Expert Mentor",
+  "description": "An advanced Angular interview prep application featuring 270+ expert questions, AI-powered detailed technical explanations, podcast-style audio answers, and a real-time voice mentor mode.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
