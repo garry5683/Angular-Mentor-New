@@ -30,7 +30,9 @@ const QuestionModal: React.FC<QuestionModalProps> = ({ question, onClose, onAnsw
         try {
           const result = await generateExpertAnswer(question.text);
           setAnswer(result);
+          // Persist locally
           localStorage.setItem(cacheKey, result);
+          // Trigger the sync to Firestore via the callback in Dashboard
           onAnswerGenerated(question.id, result);
         } catch (err) {
           setAnswer("Error generating expert answer. Please check your connection and try again.");

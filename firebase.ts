@@ -11,6 +11,7 @@ import {
   onAuthStateChanged,
   sendEmailVerification
 } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyARPDFGfSx1ZrRJCYgtgLCKfwqNF9c7boU",
@@ -24,13 +25,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  signInWithPopup,
+  signInWithPopup, 
   updateProfile,
   onAuthStateChanged,
   sendEmailVerification

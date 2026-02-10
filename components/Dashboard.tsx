@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { signOut, auth } from '../firebase';
+import { signOut, auth, db } from '../firebase';
+import { collection, query, getDocs, doc, setDoc } from 'firebase/firestore';
 import { UserProfile, Question, AudioState } from '../types';
 import { STATIC_QUESTIONS } from '../questions';
 import QuestionCard from './QuestionCard';
@@ -13,51 +14,108 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
-  const [questions, setQuestions] = useState<Question[]>(() => {
-    const saved = localStorage.getItem(`custom_questions_${user.uid}`);
-    const custom: Question[] = saved ? JSON.parse(saved) : [];
-    
-    // Sort custom questions newest first (by id which is timestamp)
-    const sortedCustom = [...custom].sort((a, b) => Number(b.id) - Number(a.id));
-    
-    const initialQuestions = [...sortedCustom, ...STATIC_QUESTIONS].map(q => {
-      const cached = localStorage.getItem(`answer_${user.uid}_${q.id}`);
-      return cached ? { ...q, cachedAnswer: cached } : q;
-    });
-    
-    return initialQuestions;
-  });
-  
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [syncing, setSyncing] = useState(true);
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [isMentorOpen, setIsMentorOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [audioState, setAudioState] = useState<AudioState>({ isPlaying: false, activeId: null });
   const [activeCategory, setActiveCategory] = useState<string>('All');
 
+  // Load initial data from Firestore and LocalStorage
+  useEffect(() => {
+    const syncData = async () => {
+      setSyncing(true);
+      try {
+        // 1. Fetch custom questions from Firestore
+        const customQRef = collection(db, 'users', user.uid, 'customQuestions');
+        const customQSnap = await getDocs(customQRef);
+        const firestoreCustom: Question[] = [];
+        customQSnap.forEach(doc => {
+          firestoreCustom.push(doc.data() as Question);
+        });
+
+        // 2. Fetch all saved answers from Firestore
+        const answersRef = collection(db, 'users', user.uid, 'answers');
+        const answersSnap = await getDocs(answersRef);
+        const firestoreAnswers: Record<string, string> = {};
+        answersSnap.forEach(doc => {
+          const data = doc.data();
+          firestoreAnswers[data.id] = data.answer;
+        });
+
+        // 3. Merge with Static Questions and Local Cache
+        const allCustom = [...firestoreCustom];
+        const sortedCustom = allCustom.sort((a, b) => Number(b.id) - Number(a.id));
+        
+        const merged = [...sortedCustom, ...STATIC_QUESTIONS].map(q => {
+          // Priority: LocalStorage (Fastest) > Firestore (Sync)
+          const localCache = localStorage.getItem(`answer_${user.uid}_${q.id}`);
+          const remoteCache = firestoreAnswers[q.id];
+          
+          const cachedAnswer = localCache || remoteCache;
+          
+          // Update local cache if missing but exists in firestore
+          if (!localCache && remoteCache) {
+            localStorage.setItem(`answer_${user.uid}_${q.id}`, remoteCache);
+          }
+          
+          return cachedAnswer ? { ...q, cachedAnswer } : q;
+        });
+
+        setQuestions(merged);
+      } catch (err) {
+        console.error("Error syncing with Firestore:", err);
+        // Fallback to local only if firestore fails
+        const saved = localStorage.getItem(`custom_questions_${user.uid}`);
+        const localCustom = saved ? JSON.parse(saved) : [];
+        setQuestions([...localCustom, ...STATIC_QUESTIONS]);
+      } finally {
+        setSyncing(false);
+      }
+    };
+
+    syncData();
+  }, [user.uid]);
+
   const categories = ['All', ...Array.from(new Set(questions.map(q => q.category).filter(Boolean)))];
 
   const handleLogout = () => signOut(auth);
 
-  const saveCustomQuestions = (allQuestions: Question[]) => {
-    const customOnly = allQuestions.filter(q => q.isCustom);
-    localStorage.setItem(`custom_questions_${user.uid}`, JSON.stringify(customOnly));
-  };
-
-  const handleAddQuestion = (text: string) => {
+  const handleAddQuestion = async (text: string) => {
     const newQ: Question = { 
       id: Date.now().toString(), 
       text, 
       category: 'Custom', 
       isCustom: true 
     };
-    // Prepend the new question
-    const updated = [newQ, ...questions];
-    setQuestions(updated);
-    saveCustomQuestions(updated);
+
+    // Save to Firestore
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'customQuestions', newQ.id), newQ);
+    } catch (err) {
+      console.error("Failed to save custom question to Firestore:", err);
+    }
+
+    // Save to LocalStorage
+    const currentCustom = questions.filter(q => q.isCustom);
+    localStorage.setItem(`custom_questions_${user.uid}`, JSON.stringify([newQ, ...currentCustom]));
+
+    setQuestions([newQ, ...questions]);
     setIsAddOpen(false);
   };
 
-  const handleUpdateAnswer = (id: string, answer: string) => {
+  const handleUpdateAnswer = async (id: string, answer: string) => {
+    // Save to Firestore
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'answers', id), { id, answer });
+    } catch (err) {
+      console.error("Failed to sync answer to Firestore:", err);
+    }
+
+    // Save to LocalStorage
+    localStorage.setItem(`answer_${user.uid}_${id}`, answer);
+
     setQuestions(prev => prev.map(q => q.id === id ? { ...q, cachedAnswer: answer } : q));
   };
 
@@ -73,11 +131,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 border-b border-slate-800 pb-8">
-        <div>
-          <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
-            Angular Expert Mentor
-          </h1>
-          <p className="text-slate-400 mt-2">Hi {user.displayName || user.email}, ready to master Angular?</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+              Angular Expert Mentor
+            </h1>
+            <div className="flex items-center gap-2 mt-2">
+              <p className="text-slate-400">Hi {user.displayName || user.email}</p>
+              {syncing && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 rounded text-[10px] text-indigo-400 font-bold uppercase tracking-widest animate-pulse border border-indigo-500/20">
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Syncing
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button 
