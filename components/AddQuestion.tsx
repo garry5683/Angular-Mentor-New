@@ -1,18 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 interface AddQuestionProps {
   onAdd: (text: string) => void;
   onClose: () => void;
-  initialText?: string;
 }
 
-const AddQuestion: React.FC<AddQuestionProps> = ({ onAdd, onClose, initialText }) => {
-  const [text, setText] = useState(initialText || '');
-
-  useEffect(() => {
-    setText(initialText || '');
-  }, [initialText]);
+const AddQuestion: React.FC<AddQuestionProps> = ({ onAdd, onClose }) => {
+  const [text, setText] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +22,7 @@ const AddQuestion: React.FC<AddQuestionProps> = ({ onAdd, onClose, initialText }
       <div className="bg-slate-900 w-full max-w-lg p-8 rounded-3xl border border-slate-800 shadow-2xl">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-white">
-            {initialText ? 'Edit Question' : 'Add Custom Question'}
+            Add Custom Question
           </h2>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -54,7 +49,7 @@ const AddQuestion: React.FC<AddQuestionProps> = ({ onAdd, onClose, initialText }
             type="submit"
             className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-[0_10px_20px_rgba(79,70,229,0.3)] transition-all active:scale-95"
           >
-            {initialText ? 'Save Changes' : 'Add to Question Pool'}
+            Add to Question Pool
           </button>
         </form>
       </div>

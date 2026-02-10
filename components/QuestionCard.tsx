@@ -5,11 +5,9 @@ import { Question } from '../types';
 interface QuestionCardProps {
   question: Question;
   onClick: () => void;
-  onEdit?: (e: React.MouseEvent, question: Question) => void;
-  onDelete?: (e: React.MouseEvent, id: string) => void;
 }
 
-const QuestionCard: React.FC<QuestionCardProps> = ({ question, onClick, onEdit, onDelete }) => {
+const QuestionCard: React.FC<QuestionCardProps> = ({ question, onClick }) => {
   return (
     <div 
       onClick={onClick}
@@ -37,33 +35,6 @@ const QuestionCard: React.FC<QuestionCardProps> = ({ question, onClick, onEdit, 
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
                 <span className="text-[10px] font-black uppercase tracking-widest">Saved</span>
-              </div>
-            )}
-            
-            {question.isCustom && (
-              <div className="flex items-center gap-1">
-                {onEdit && (
-                  <button 
-                    onClick={(e) => onEdit(e, question)}
-                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded transition"
-                    title="Edit Question"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                )}
-                {onDelete && (
-                  <button 
-                    onClick={(e) => onDelete(e, question.id)}
-                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded transition"
-                    title="Delete Question"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
               </div>
             )}
           </div>

@@ -31,7 +31,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [isMentorOpen, setIsMentorOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [audioState, setAudioState] = useState<AudioState>({ isPlaying: false, activeId: null });
   const [activeCategory, setActiveCategory] = useState<string>('All');
 
@@ -44,36 +43,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     localStorage.setItem(`custom_questions_${user.uid}`, JSON.stringify(customOnly));
   };
 
-  const handleAddOrUpdateQuestion = (text: string) => {
-    let updated: Question[];
-    if (editingQuestion) {
-      updated = questions.map(q => q.id === editingQuestion.id ? { ...q, text } : q);
-    } else {
-      const newQ: Question = { 
-        id: Date.now().toString(), 
-        text, 
-        category: 'Custom', 
-        isCustom: true 
-      };
-      // Prepend the new question to the custom ones (which are at the start of the array)
-      const custom = questions.filter(q => q.isCustom);
-      const rest = questions.filter(q => !q.isCustom);
-      updated = [newQ, ...custom, ...rest];
-    }
+  const handleAddQuestion = (text: string) => {
+    const newQ: Question = { 
+      id: Date.now().toString(), 
+      text, 
+      category: 'Custom', 
+      isCustom: true 
+    };
+    // Prepend the new question
+    const updated = [newQ, ...questions];
     setQuestions(updated);
     saveCustomQuestions(updated);
     setIsAddOpen(false);
-    setEditingQuestion(null);
-  };
-
-  const handleDeleteQuestion = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this question?')) {
-      const updated = questions.filter(q => q.id !== id);
-      setQuestions(updated);
-      saveCustomQuestions(updated);
-      localStorage.removeItem(`answer_${user.uid}_${id}`);
-    }
   };
 
   const handleUpdateAnswer = (id: string, answer: string) => {
@@ -83,12 +64,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const stopAllAudio = useCallback(() => {
     setAudioState({ isPlaying: false, activeId: null });
   }, []);
-
-  const handleEditClick = (e: React.MouseEvent, q: Question) => {
-    e.stopPropagation();
-    setEditingQuestion(q);
-    setIsAddOpen(true);
-  };
 
   const filteredQuestions = activeCategory === 'All' 
     ? questions 
@@ -106,7 +81,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button 
-            onClick={() => { setEditingQuestion(null); setIsAddOpen(true); }}
+            onClick={() => setIsAddOpen(true)}
             className="px-4 py-2.5 bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 text-sm font-semibold rounded-lg hover:bg-indigo-600/20 transition"
           >
             + Add Question
@@ -149,8 +124,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               stopAllAudio();
               setSelectedQuestion(q);
             }} 
-            onEdit={handleEditClick}
-            onDelete={handleDeleteQuestion}
           />
         ))}
       </div>
@@ -192,9 +165,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
       {isAddOpen && (
         <AddQuestion 
-          onAdd={handleAddOrUpdateQuestion} 
+          onAdd={handleAddQuestion} 
           onClose={() => setIsAddOpen(false)} 
-          initialText={editingQuestion?.text}
         />
       )}
     </div>
