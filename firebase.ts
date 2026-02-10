@@ -13,6 +13,19 @@ import {
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+/**
+ * FIRESTORE SECURITY RULES (Copy & Paste these into Firebase Console):
+ * 
+ * rules_version = '2';
+ * service cloud.firestore {
+ *   match /databases/{database}/documents {
+ *     match /users/{userId}/{document=**} {
+ *       allow read, write: if request.auth != null && request.auth.uid == userId;
+ *     }
+ *   }
+ * }
+ */
+
 const firebaseConfig = {
   apiKey: "AIzaSyARPDFGfSx1ZrRJCYgtgLCKfwqNF9c7boU",
   authDomain: "angular-mentor-1215e.firebaseapp.com",

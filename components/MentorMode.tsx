@@ -12,6 +12,8 @@ const MentorMode: React.FC<MentorModeProps> = ({ onClose }) => {
   const sessionRef = useRef<any>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const inputCtxRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextStartTimeRef = useRef<number>(0);
 
@@ -25,10 +27,16 @@ const MentorMode: React.FC<MentorModeProps> = ({ onClose }) => {
 
   useEffect(() => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    let mounted = true;
     
     const connect = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (!mounted) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        streamRef.current = stream;
         
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         inputCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -44,13 +52,16 @@ const MentorMode: React.FC<MentorModeProps> = ({ onClose }) => {
           },
           callbacks: {
             onopen: () => {
+              if (!mounted) return;
               setIsActive(true);
               setIsConnecting(false);
               
               const source = inputCtxRef.current!.createMediaStreamSource(stream);
               const processor = inputCtxRef.current!.createScriptProcessor(4096, 1, 1);
+              processorRef.current = processor;
               
               processor.onaudioprocess = (e) => {
+                if (!mounted) return;
                 const inputData = e.inputBuffer.getChannelData(0);
                 const l = inputData.length;
                 const int16 = new Int16Array(l);
@@ -60,7 +71,9 @@ const MentorMode: React.FC<MentorModeProps> = ({ onClose }) => {
                 const base64 = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)));
                 
                 sessionPromise.then(session => {
-                  session.sendRealtimeInput({ media: { data: base64, mimeType: 'audio/pcm;rate=16000' } });
+                  if (mounted) {
+                    session.sendRealtimeInput({ media: { data: base64, mimeType: 'audio/pcm;rate=16000' } });
+                  }
                 });
               };
               
@@ -68,6 +81,8 @@ const MentorMode: React.FC<MentorModeProps> = ({ onClose }) => {
               processor.connect(inputCtxRef.current!.destination);
             },
             onmessage: async (msg) => {
+              if (!mounted || !audioCtxRef.current) return;
+              
               const audioBase64 = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
               if (audioBase64) {
                 const binary = atob(audioBase64);
@@ -75,15 +90,15 @@ const MentorMode: React.FC<MentorModeProps> = ({ onClose }) => {
                 for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
                 
                 const dataInt16 = new Int16Array(bytes.buffer);
-                const buffer = audioCtxRef.current!.createBuffer(1, dataInt16.length, 24000);
+                const buffer = audioCtxRef.current.createBuffer(1, dataInt16.length, 24000);
                 const chan = buffer.getChannelData(0);
                 for(let i=0; i<dataInt16.length; i++) chan[i] = dataInt16[i] / 32768.0;
 
-                const source = audioCtxRef.current!.createBufferSource();
+                const source = audioCtxRef.current.createBufferSource();
                 source.buffer = buffer;
-                source.connect(audioCtxRef.current!.destination);
+                source.connect(audioCtxRef.current.destination);
                 
-                const playTime = Math.max(nextStartTimeRef.current, audioCtxRef.current!.currentTime);
+                const playTime = Math.max(nextStartTimeRef.current, audioCtxRef.current.currentTime);
                 source.start(playTime);
                 nextStartTimeRef.current = playTime + buffer.duration;
                 sourcesRef.current.add(source);
@@ -94,22 +109,27 @@ const MentorMode: React.FC<MentorModeProps> = ({ onClose }) => {
                 stopAudio();
               }
             },
-            onerror: () => setIsActive(false),
-            onclose: () => setIsActive(false)
+            onerror: () => mounted && setIsActive(false),
+            onclose: () => mounted && setIsActive(false)
           }
         });
 
         sessionRef.current = await sessionPromise;
       } catch (err) {
         console.error("Live API connection failed", err);
-        onClose();
+        if (mounted) onClose();
       }
     };
 
     connect();
 
     return () => {
+      mounted = false;
       stopAudio();
+      
+      processorRef.current?.disconnect();
+      streamRef.current?.getTracks().forEach(track => track.stop());
+      
       sessionRef.current?.close();
       audioCtxRef.current?.close();
       inputCtxRef.current?.close();
