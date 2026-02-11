@@ -6,7 +6,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 export async function generateExpertAnswer(questionText: string): Promise<string> {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     contents: `Acting as a Senior Angular Architect with 9+ years of deep experience, provide a detailed technical explanation for the following interview question: "${questionText}". 
     The explanation should include architecture insights, code examples where relevant, and industry best practices that would impress an interviewer. Keep it structured and professional.`,
     config: {
